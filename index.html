@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live Chart DOGE/IDR Indodax</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 10px;
+      background-color: #ffffff;
+      color: #000;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      margin-bottom: 5px;
+    }
+    p.subtitle {
+      text-align: center;
+      font-size: 1rem;
+      margin-bottom: 15px;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
+    canvas {
+      width: 100% !important;
+      height: 200px !important;
+      margin-bottom: 20px;
+    }
+    .volume-image {
+      display: block;
+      margin: 10px auto;
+      max-width: 160px;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Live DOGE/IDR - Indodax</h1>
+<p class="subtitle">Mau cuan trading kripto? Perhatikan grafik dibawah ini:</p>
+<div class="container">
+  <img src="volumedoge02.png" alt="Volume DOGE" class="volume-image" />
+  <canvas id="priceChart"></canvas>
+  <canvas id="volumeChart"></canvas>
+  <canvas id="rsiChart"></canvas>
+</div>
+
+<script>
+  const fontSize = 18;
+
+  const commonOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        labels: {
+          color: '#000',
+          font: { size: fontSize + 1 }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: '#000',
+          font: { size: fontSize }
+        }
+      },
+      y: {
+        ticks: {
+          color: '#000',
+          font: { size: fontSize }
+        }
+      }
+    }
+  };
+
+  const priceChart = new Chart(document.getElementById('priceChart'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Harga DOGE/IDR',
+        data: [],
+        borderColor: '#007bff',
+        backgroundColor: 'rgba(0,123,255,0.1)',
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: commonOptions
+  });
+
+  const volumeChart = new Chart(document.getElementById('volumeChart'), {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Volume DOGE',
+        data: [],
+        backgroundColor: '#ff9800',
+      }]
+    },
+    options: commonOptions
+  });
+
+  const rsiChart = new Chart(document.getElementById('rsiChart'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'RSI (14)',
+          data: [],
+          borderColor: '#8e44ad',
+          fill: false,
+          tension: 0.3,
+        },
+        {
+          label: 'Overbought (70)',
+          data: [],
+          borderColor: 'red',
+          borderDash: [5, 5],
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: 'Oversold (30)',
+          data: [],
+          borderColor: 'green',
+          borderDash: [5, 5],
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      ...commonOptions,
+      scales: {
+        ...commonOptions.scales,
+        y: {
+          ...commonOptions.scales.y,
+          min: 0,
+          max: 100
+        }
+      }
+    }
+  });
+
+  const maxDataPoints = 60;
+  const timestamps = [], prices = [], volumes = [], rsiValues = [];
+
+  function calculateRSI(closes, period = 14) {
+    if (closes.length < period + 1) return null;
+    let gains = 0, losses = 0;
+    for (let i = closes.length - period; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      if (diff > 0) gains += diff;
+      else losses -= diff;
+    }
+    const rs = gains / (losses || 1);
+    return +(100 - 100 / (1 + rs)).toFixed(2);
+  }
+
+  async function fetchData() {
+    try {
+      const res = await fetch('https://indodax.com/api/doge_idr/trades');
+      const data = await res.json();
+
+      const now = new Date();
+      const time = now.toLocaleTimeString();
+
+      const price = parseFloat(data[0].price);
+      const volumeSum = data.reduce((acc, tx) => acc + parseFloat(tx.amount), 0);
+
+      timestamps.push(time);
+      prices.push(price);
+      volumes.push(volumeSum);
+      rsiValues.push(prices.length >= 15 ? calculateRSI(prices) : null);
+
+      if (timestamps.length > maxDataPoints) {
+        timestamps.shift();
+        prices.shift();
+        volumes.shift();
+        rsiValues.shift();
+      }
+
+      priceChart.data.labels = [...timestamps];
+      priceChart.data.datasets[0].data = [...prices];
+
+      volumeChart.data.labels = [...timestamps];
+      volumeChart.data.datasets[0].data = [...volumes];
+
+      rsiChart.data.labels = [...timestamps];
+      rsiChart.data.datasets[0].data = [...rsiValues];
+      rsiChart.data.datasets[1].data = Array(timestamps.length).fill(70);
+      rsiChart.data.datasets[2].data = Array(timestamps.length).fill(30);
+
+      priceChart.update();
+      volumeChart.update();
+      rsiChart.update();
+    } catch (err) {
+      console.error("Gagal ambil data:", err);
+    }
+  }
+
+  setInterval(fetchData, 5000);
+  fetchData();
+</script>
+
+</body>
+</html>
